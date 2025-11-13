@@ -1,0 +1,45 @@
+
+// model EmailDigest {
+//   id           String    @id @default(cuid())
+//   userId       String
+//   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   totalEmails  Int
+//   summaryText  String
+//   createdAt    DateTime  @default(now())
+//   updatedAt    DateTime  @updatedAt
+//   summaries    EmailSummary[]
+
+//   @@map("email_digests")
+// }
+
+// model EmailSummary {
+//   id             String       @id @default(cuid())
+//   digestId       String
+//   digest         EmailDigest  @relation(fields: [digestId], references: [id], onDelete: Cascade)
+//   emailId        String
+//   senderEmail    String
+//   senderName     String
+//   subject        String
+//   summary        String
+//   category       String
+//   priority       String
+//   actionRequired Boolean      @default(false)
+//   sentiment      String?
+//   createdAt      DateTime     @default(now())
+
+//   @@map("email_summaries")
+// }
+
+// model GmailConnection {
+//   id           String   @id @default(cuid())
+//   userId       String   @unique
+//   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   accessToken  String
+//   refreshToken String
+//   expiryDate   DateTime
+//   connected    Boolean  @default(true)
+//   createdAt    DateTime @default(now())
+//   updatedAt    DateTime @updatedAt
+
+//   @@map("gmail_connections")
+// }
