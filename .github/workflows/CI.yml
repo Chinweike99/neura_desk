@@ -1,0 +1,37 @@
+name: NEURA DESK CI
+on:
+  push:
+    branches: [staging]
+  pull_request:
+    branches: [staging]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['lts/*']
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'pnpm'
+    
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    
+    - name: Approve Prisma build scripts
+      run: pnpm approve-builds @prisma/engines prisma
+    
+    - name: Run linting
+      run: pnpm run lint
+    
+    - name: Build project
+      run: pnpm run build
