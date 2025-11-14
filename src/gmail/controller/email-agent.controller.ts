@@ -15,6 +15,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ConnectGmailDto } from 'src/dtos/email.dto';
 import { EmailAgentService } from '../service/email-agent.service';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
+import type { User } from '@prisma/client';
 
 @Controller('email-agent')
 @UseGuards(AuthGuard('jwt'))
@@ -23,7 +24,7 @@ export class EmailAgentController {
 
   @Post('connect')
   async connectGmail(
-    @GetUser() user: any,
+    @GetUser() user: User,
     @Body() connectGmailDto: ConnectGmailDto,
   ) {
     return this.emailAgentService.connectGmail(
@@ -35,18 +36,18 @@ export class EmailAgentController {
   }
 
   @Get('status')
-  async getGmailStatus(@GetUser() user: any) {
+  async getGmailStatus(@GetUser() user: User) {
     return this.emailAgentService.getGmailStatus(user.id);
   }
 
   @Post('run')
-  async runEmailDigest(@GetUser() user: any) {
+  async runEmailDigest(@GetUser() user: User) {
     return this.emailAgentService.runEmailDigest(user.id);
   }
 
   @Get('digests')
   async getDigestHistory(
-    @GetUser() user: any,
+    @GetUser() user: User,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
@@ -54,19 +55,13 @@ export class EmailAgentController {
   }
 
   @Get('digests/:id')
-  async getDigestDetails(
-    @GetUser() user: any,
-    @Param('id') digestId: string,
-  ) {
+  async getDigestDetails(@GetUser() user: User, @Param('id') digestId: string) {
     return this.emailAgentService.getDigestDetails(user.id, digestId);
   }
 
   @Delete('digests/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteDigest(
-    @GetUser() user: any,
-    @Param('id') digestId: string,
-  ) {
+  async deleteDigest(@GetUser() user: User, @Param('id') digestId: string) {
     return this.emailAgentService.deleteDigest(user.id, digestId);
   }
 }

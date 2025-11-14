@@ -18,6 +18,6 @@ export class CreateEmailDigestDto {
     category: string;
     priority: string;
     actionRequired: boolean;
-    sentiment: string;
+    sentiment: string | null;
   }>;
 }

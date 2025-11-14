@@ -1,24 +1,27 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "src/prisma/prisma.service";
-import { EmailAnalysisService } from "../email-analysis/email-analysis";
-import { GmailService } from "./gmail.service";
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { EmailAnalysisService } from '../email-analysis/email-analysis';
+import { GmailService } from './gmail.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { CreateEmailDigestDto } from "src/dtos/email.dto";
-import { EmailSummary, Prisma } from "@prisma/client";
-
-
+import { CreateEmailDigestDto } from 'src/dtos/email.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class EmailAgentService {
-    private readonly logger = new Logger(EmailAgentService.name);
+  private readonly logger = new Logger(EmailAgentService.name);
 
-    constructor(
+  constructor(
     private prisma: PrismaService,
     private gmailService: GmailService,
     private emailAnalysis: EmailAnalysisService,
   ) {}
 
-  async connectGmail(userId: string, accessToken: string, refreshToken: string, expiryDate: Date){
+  async connectGmail(
+    userId: string,
+    accessToken: string,
+    refreshToken: string,
+    expiryDate: Date,
+  ) {
     // Store or update Gmail connection
     await this.prisma.gmailConnection.upsert({
       where: { userId },
@@ -45,7 +48,7 @@ export class EmailAgentService {
     return {
       success: true,
       message: 'Gmail account connected successfully.',
-    }
+    };
   }
 
   async getGmailStatus(userId: string) {
@@ -61,56 +64,65 @@ export class EmailAgentService {
     }
 
     // Test if connection is still valid
-    this.gmailService.setCredentials(connection.accessToken, connection.refreshToken);
+    this.gmailService.setCredentials(
+      connection.accessToken,
+      connection.refreshToken,
+    );
     const isActive = await this.gmailService.testConnection();
 
-    if(!isActive){
+    if (!isActive) {
       // Update status in DB
       await this.prisma.gmailConnection.update({
         where: { userId },
         data: { connected: false },
-      })
+      });
     }
     return {
       connected: isActive,
       lastConnected: connection.updatedAt,
-      message: isActive ? 'Gmail account is connected and active.' : 'Gmail account connection is inactive.',
-    }
+      message: isActive
+        ? 'Gmail account is connected and active.'
+        : 'Gmail account connection is inactive.',
+    };
   }
 
-  async runEmailDigest(userId: string): Promise<CreateEmailDigestDto>{
+  async runEmailDigest(userId: string): Promise<CreateEmailDigestDto> {
     this.logger.log(`Running email digest for user: ${userId}`);
     // Get Gmail connection
     const connection = await this.prisma.gmailConnection.findUnique({
-      where: {userId, connected: true}
+      where: { userId, connected: true },
     });
 
-    if(!connection){
-      throw new NotFoundException("Gmail connection not found or inactive")
-    };
+    if (!connection) {
+      throw new NotFoundException('Gmail connection not found or inactive');
+    }
     // Set up Gmail service with users tokens
-    this.gmailService.setCredentials(connection.accessToken, connection.refreshToken);
+    this.gmailService.setCredentials(
+      connection.accessToken,
+      connection.refreshToken,
+    );
 
     // Get last digest to determine emails since last check
     const lastDigest = await this.prisma.emailDigest.findFirst({
-      where: {userId},
-      orderBy: {createdAt: 'desc'}
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
     });
 
-    const lastChecked = lastDigest?.createdAt || new Date(Date.now() - 24 * 60 * 60 * 1000) // Default to 24 hours ago
+    const lastChecked =
+      lastDigest?.createdAt || new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24 hours ago
 
     // Fetch unread emails
     const unreadEmails = await this.gmailService.getUnreadEmails(lastChecked);
     this.logger.log(`Found ${unreadEmails.length} unread emails`);
 
-    if(unreadEmails.length === 0) {
+    if (unreadEmails.length === 0) {
       // Create empty digest
       const digest = await this.prisma.emailDigest.create({
         data: {
           userId,
           totalEmails: 0,
-          summaryText: "No new Emails to process"
-        }
+          summaryText: 'No new Emails to process',
+        },
       });
 
       return {
@@ -118,20 +130,20 @@ export class EmailAgentService {
         totalEmails: 0,
         summaryText: digest.summaryText,
         createdAt: digest.createdAt,
-        summaries:  []
-      }
-    };
+        summaries: [],
+      };
+    }
 
     // Process each email with AI analysis
     const emailSummaries: Prisma.EmailSummaryCreateInput[] = [];
     const processedEmailIds: string[] = [];
 
-    for(const email of unreadEmails){
+    for (const email of unreadEmails) {
       try {
         const analysis = await this.emailAnalysis.analyzeEmail({
           subject: email.subject,
           body: email.body.substring(0, 10000), // Limit body length for AI processing
-          sender: email.sender.name || email.sender.email
+          sender: email.sender.name || email.sender.email,
         });
 
         emailSummaries.push({
@@ -147,11 +159,11 @@ export class EmailAgentService {
           digest: {
             create: undefined,
             connectOrCreate: undefined,
-            connect: undefined
-          }
-        }) 
+            connect: undefined,
+          },
+        });
 
-        processedEmailIds.push(email.id)
+        processedEmailIds.push(email.id);
       } catch (error) {
         this.logger.error(`Failed to analyze email ${email.id}:`, error);
       }
@@ -159,12 +171,12 @@ export class EmailAgentService {
 
     // Generate overall digest summary
     const digestSummary = await this.emailAnalysis.generateDigestSummary(
-      emailSummaries.map(s => ({
+      emailSummaries.map((s) => ({
         subject: s.subject,
         summary: s.summary,
         category: s.category,
-        priority: s.priority
-      }))
+        priority: s.priority,
+      })),
     );
 
     // Save digest and summaries to database
@@ -174,30 +186,32 @@ export class EmailAgentService {
         totalEmails: emailSummaries.length,
         summaryText: digestSummary,
         summaries: {
-          create: emailSummaries
-        }
+          create: emailSummaries,
+        },
       },
       include: {
-        summaries: true
-      }
+        summaries: true,
+      },
     });
 
     // Mark emails as read in Gmail
-    for(const emailId of processedEmailIds){
+    for (const emailId of processedEmailIds) {
       try {
         await this.gmailService.markAsRead(emailId);
       } catch (error) {
-        this.logger.error(`Failed to mark email ${emailId} as read:`, error)
+        this.logger.error(`Failed to mark email ${emailId} as read:`, error);
       }
     }
-    this.logger.log(`Email digest completed for user: ${userId}. Processed ${emailSummaries.length} emails.`);
+    this.logger.log(
+      `Email digest completed for user: ${userId}. Processed ${emailSummaries.length} emails.`,
+    );
 
     return {
       id: digest.id,
       totalEmails: digest.totalEmails,
       summaryText: digest.summaryText,
       createdAt: digest.createdAt,
-      summaries: digest.summaries.map(s => ({
+      summaries: digest.summaries.map((s) => ({
         id: s.id,
         senderEmail: s.senderEmail,
         senderName: s.senderName,
@@ -207,11 +221,11 @@ export class EmailAgentService {
         priority: s.priority,
         actionRequired: s.actionRequired,
         sentiment: s.sentiment,
-      })) as any,
+      })),
     };
-  };
+  }
 
-   async getDigestHistory(userId: string, page: number = 1, limit: number = 10) {
+  async getDigestHistory(userId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
 
     const [digests, total] = await Promise.all([
@@ -292,9 +306,14 @@ export class EmailAgentService {
     for (const connection of connections) {
       try {
         await this.runEmailDigest(connection.userId);
-        this.logger.log(`Scheduled digest completed for user: ${connection.userId}`);
+        this.logger.log(
+          `Scheduled digest completed for user: ${connection.userId}`,
+        );
       } catch (error) {
-        this.logger.error(`Scheduled digest failed for user ${connection.userId}:`, error);
+        this.logger.error(
+          `Scheduled digest failed for user ${connection.userId}:`,
+          error,
+        );
       }
     }
   }

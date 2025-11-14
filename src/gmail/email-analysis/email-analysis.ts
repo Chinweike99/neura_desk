@@ -1,6 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { z } from 'zod';
+
+// Define schema for validation
+const EmailAnalysisSchema = z.object({
+  summary: z.string(),
+  category: z.enum([
+    'work',
+    'personal',
+    'newsletter',
+    'promotional',
+    'social',
+    'important',
+    'spam',
+    'other',
+  ]),
+  priority: z.enum(['high', 'medium', 'low']),
+  actionRequired: z.boolean(),
+  sentiment: z.enum(['positive', 'negative', 'neutral']),
+});
+
+type EmailAnalysis = z.infer<typeof EmailAnalysisSchema>;
 
 @Injectable()
 export class EmailAnalysisService {
@@ -19,15 +40,9 @@ export class EmailAnalysisService {
     subject: string;
     body: string;
     sender: string;
-  }): Promise<{
-    summary: string;
-    category: string;
-    priority: 'high' | 'medium' | 'low';
-    actionRequired: boolean;
-    sentiment: 'positive' | 'negative' | 'neutral';
-  }> {
+  }): Promise<EmailAnalysis> {
     try {
-      const model = this.genAI.getGenerativeModel({ 
+      const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.0-flash-exp',
       });
 
@@ -49,7 +64,7 @@ Be concise and accurate in your analysis. Focus on the actual content rather tha
 `;
 
       const result = await model.generateContent(prompt);
-      const response = await result.response;
+      const response = result.response;
       const text = response.text();
 
       // Extract JSON from response
@@ -58,15 +73,12 @@ Be concise and accurate in your analysis. Focus on the actual content rather tha
         throw new Error('Invalid response format from AI');
       }
 
-      const analysis = JSON.parse(jsonMatch[0]);
+      const rawAnalysis = JSON.parse(jsonMatch[0]) as unknown;
 
-      return {
-        summary: analysis.summary,
-        category: analysis.category,
-        priority: analysis.priority,
-        actionRequired: analysis.actionRequired,
-        sentiment: analysis.sentiment,
-      };
+      // Validate and parse the analysis
+      const analysis = EmailAnalysisSchema.parse(rawAnalysis);
+
+      return analysis;
     } catch (error) {
       this.logger.error('Error analyzing email with AI:', error);
       // Return fallback analysis
@@ -80,20 +92,23 @@ Be concise and accurate in your analysis. Focus on the actual content rather tha
     }
   }
 
-  async generateDigestSummary(summaries: Array<{
-    subject: string;
-    summary: string;
-    category: string;
-    priority: string;
-  }>): Promise<string> {
+  async generateDigestSummary(
+    summaries: Array<{
+      subject: string;
+      summary: string;
+      category: string;
+      priority: string;
+    }>,
+  ): Promise<string> {
     try {
-      const model = this.genAI.getGenerativeModel({ 
+      const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.0-flash-exp',
       });
 
       const emailList = summaries
-        .map((s, i) => 
-          `${i + 1}. Subject: ${s.subject}\n   Summary: ${s.summary}\n   Category: ${s.category}\n   Priority: ${s.priority}`
+        .map(
+          (s, i) =>
+            `${i + 1}. Subject: ${s.subject}\n   Summary: ${s.summary}\n   Category: ${s.category}\n   Priority: ${s.priority}`,
         )
         .join('\n\n');
 
@@ -112,11 +127,11 @@ Keep it professional and easy to scan. Maximum 300 words.
 `;
 
       const result = await model.generateContent(prompt);
-      const response = await result.response;
+      const response = result.response;
       return response.text();
     } catch (error) {
       this.logger.error('Error generating digest summary:', error);
-      return `Digest of ${summaries.length} emails processed. ${summaries.filter(s => s.priority === 'high').length} require attention.`;
+      return `Digest of ${summaries.length} emails processed. ${summaries.filter((s) => s.priority === 'high').length} require attention.`;
     }
   }
 }
