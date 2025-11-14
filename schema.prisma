@@ -1,45 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
 
-// model EmailDigest {
-//   id           String    @id @default(cuid())
-//   userId       String
-//   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-//   totalEmails  Int
-//   summaryText  String
-//   createdAt    DateTime  @default(now())
-//   updatedAt    DateTime  @updatedAt
-//   summaries    EmailSummary[]
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-//   @@map("email_digests")
-// }
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-// model EmailSummary {
-//   id             String       @id @default(cuid())
-//   digestId       String
-//   digest         EmailDigest  @relation(fields: [digestId], references: [id], onDelete: Cascade)
-//   emailId        String
-//   senderEmail    String
-//   senderName     String
-//   subject        String
-//   summary        String
-//   category       String
-//   priority       String
-//   actionRequired Boolean      @default(false)
-//   sentiment      String?
-//   createdAt      DateTime     @default(now())
+  // Relations
+  emailDigests        EmailDigest[]
+  gmailConnection     GmailConnection?
+  socialMediaAccounts SocialMediaAccount[]
+  socialMediaPosts    SocialMediaPost[]
+  profile             UserProfile?
+  jobListings         JobListing[]
+  jobSearchQueries    JobSearchQuery[]
+  notifications       Notification[]
+}
 
-//   @@map("email_summaries")
-// }
+model EmailDigest {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalEmails Int
+  summaryText String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  summaries   EmailSummary[]
 
-// model GmailConnection {
-//   id           String   @id @default(cuid())
-//   userId       String   @unique
-//   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-//   accessToken  String
-//   refreshToken String
-//   expiryDate   DateTime
-//   connected    Boolean  @default(true)
-//   createdAt    DateTime @default(now())
-//   updatedAt    DateTime @updatedAt
+  @@map("email_digests")
+}
 
-//   @@map("gmail_connections")
-// }
+model EmailSummary {
+  id             String      @id @default(cuid())
+  digestId       String
+  digest         EmailDigest @relation(fields: [digestId], references: [id], onDelete: Cascade)
+  emailId        String
+  senderEmail    String
+  senderName     String
+  subject        String
+  summary        String
+  category       String
+  priority       String
+  actionRequired Boolean     @default(false)
+  sentiment      String?
+  createdAt      DateTime    @default(now())
+
+  @@map("email_summaries")
+}
+
+model GmailConnection {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken  String
+  refreshToken String
+  expiryDate   DateTime
+  connected    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("gmail_connections")
+}
+
+model SocialMediaAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform        String   // 'twitter', 'linkedin'
+  accessToken     String
+  refreshToken    String?
+  accountId       String
+  accountUsername String
+  connected       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, platform])
+  @@map("social_media_accounts")
+}
+
+model SocialMediaPost {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform         String   // 'twitter', 'linkedin'
+  content          String
+  hashtags         String[]
+  status           String   @default("pending") // 'pending', 'approved', 'declined', 'posted', 'draft'
+  scheduledFor     DateTime?
+  postedAt         DateTime?
+  postId           String?
+  aiReasoning      String?
+  themeDay         String?  // Monday, Tuesday, etc.
+  contentCategory  String?  // tech_tips, career_journey, etc.
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("social_media_posts")
+}
+
+model PostTheme {
+  id              String   @id @default(cuid())
+  dayOfWeek       Int      // 0 (Sunday) to 6 (Saturday)
+  themeName       String
+  contentCategory String
+  description     String
+  exampleTopics   String[]
+  createdAt       DateTime @default(now())
+
+  @@map("post_themes")
+}
+
+model UserProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills       Json     // { frontend: string[], backend: string[], tools: string[] }
+  experience   String?
+  location     String?
+  preferences  Json     // { remote: boolean, jobTypes: string[], roles: string[] }
+  portfolioUrl String?
+  resumeText   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+model JobListing {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source           String   // 'twitter', 'email', 'api'
+  sourceId         String
+  jobTitle         String
+  company          String
+  description      String
+  applicationUrl   String?
+  applicationEmail String?
+  location         String?
+  remote           Boolean  @default(false)
+  jobType          String?  // 'Full-time', 'Contract', 'Freelance'
+  salaryRange      String?
+  requirements     String[]
+  postedDate       DateTime?
+  matchScore       Int      // 0-100
+  skillsMatch      Json?    // { matched: string[], missing: string[] }
+  priority         String   // 'high', 'medium', 'low'
+  status           String   @default("new") // 'new', 'reviewing', 'applied', 'declined'
+  coverLetter      String?
+  applicationNotes String?
+  appliedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, source, sourceId])
+  @@map("job_listings")
+}
+
+model JobSearchQuery {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  queryText String
+  platform  String   // 'twitter', 'linkedin', 'indeed'
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("job_search_queries")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // 'email', 'social_media', 'job_hunter'
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  actionUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notifications")
+}
