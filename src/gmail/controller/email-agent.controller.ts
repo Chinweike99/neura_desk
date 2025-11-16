@@ -14,7 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 // import { GetUser } from '../auth/decorators/get-user.decorator';
 import { ConnectGmailDto } from 'src/dtos/email.dto';
 import { EmailAgentService } from '../service/email-agent.service';
-import { GetUser } from 'src/auth/decorator/get-user.decorator';
+import { GetUser } from 'src/decorator/get-user.decorator';
 import type { User } from '@prisma/client';
 
 @Controller('email-agent')
