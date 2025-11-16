@@ -42,7 +42,8 @@ export class AuthService {
         }
 
         const hashedPassword = await argon2.hash(password);
-        const newUser = await this.prisma.user.create({
+        try {
+            const newUser = await this.prisma.user.create({
             data: {
                 email,
                 name,
@@ -52,6 +53,12 @@ export class AuthService {
 
         const { password: _, ...result } = newUser;
         return result;
+        } catch (error) {
+            if (error.code === 'P2002') {
+                throw new UnauthorizedException('Email already exists');
+            }
+            throw error;
+        }
     }
 
 
