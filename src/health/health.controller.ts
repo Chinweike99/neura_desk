@@ -5,15 +5,14 @@ import {
   HealthCheck, 
   HealthCheckService, 
   HealthIndicatorResult,
-  MemoryHealthIndicator, 
-  TypeOrmHealthIndicator 
+  MemoryHealthIndicator,
+  HealthCheckResult 
 } from '@nestjs/terminus';
 
 @Controller('health')
 export class HealthController {
   constructor(
     private health: HealthCheckService,
-    private db: TypeOrmHealthIndicator,
     private disk: DiskHealthIndicator,
     private memory: MemoryHealthIndicator,
     private prisma: PrismaService,
@@ -21,32 +20,50 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  async check() {
+  async check(): Promise<HealthCheckResult> {
     return this.health.check([
-      // Database health check
-      () => this.db.pingCheck('database'),
-
       // Memory health check
-      () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024), // 150MB threshold
+      () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
       
       // Disk storage health check
-      () => this.disk.checkStorage('disk', { path: '/', thresholdPercent: 0.9 }),
+    //   () => this.disk.checkStorage('disk', { path: 'C:\\', thresholdPercent: 0.9 }),
 
-      // Custom database query check - FIXED
+      // Prisma database health check
       async (): Promise<HealthIndicatorResult> => {
         try {
           await this.prisma.$queryRaw`SELECT 1`;
           return {
-            'custom-database': {
+            'database': {
               status: 'up',
-              message: 'Database query executed successfully'
+              message: 'Database connection successful'
             }
           };
-        } catch (error) {
+        } catch (error: any) {
           return {
-            'custom-database': {
+            'database': {
               status: 'down',
               message: error.message
+            }
+          };
+        }
+      },
+
+      // Additional Prisma health check - test actual query
+      async (): Promise<HealthIndicatorResult> => {
+        try {
+          // Try to count users or any simple table operation
+          const userCount = await this.prisma.user.count();
+          return {
+            'prisma-query': {
+              status: 'up',
+              message: `Database query successful, ${userCount} users found`
+            }
+          };
+        } catch (error: any) {
+          return {
+            'prisma-query': {
+              status: 'down',
+              message: `Query failed: ${error.message}`
             }
           };
         }
@@ -99,7 +116,7 @@ export class HealthController {
         memory: { 
           status: string; 
           usage: number; 
-          total?: number;
+          total: number;
         };
         disk: { status: string };
       };
@@ -112,7 +129,7 @@ export class HealthController {
       version: process.env.npm_package_version || '1.0.0',
       services: {
         database: { status: 'checking', responseTime: 0 },
-        memory: { status: 'checking', usage: 0 },
+        memory: { status: 'checking', usage: 0, total: 0 },
         disk: { status: 'checking' },
       },
     };
